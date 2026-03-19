@@ -1,0 +1,6 @@
+@LanChat.Server_HostAddress = http://localhost:5087
+
+GET {{LanChat.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
