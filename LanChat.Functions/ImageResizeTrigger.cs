@@ -1,3 +1,4 @@
+using System.IO;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using SixLabors.ImageSharp;
@@ -18,21 +19,19 @@ namespace LanChat.Functions
         [Function(nameof(ImageResizeTrigger))]
         [BlobOutput("thumbnails/{name}", Connection = "AzureWebJobsStorage")]
         public async Task<byte[]> Run(
-            [BlobTrigger("images/{name}", Connection = "AzureWebJobsStorage")] Stream stream,
+            [BlobTrigger("images/{name}", Connection = "AzureWebJobsStorage")] byte[] imageBytes,
             string name)
         {
             _logger.LogInformation($"Execution triggered for blob: {name}");
-            _logger.LogInformation($"Original Size: {stream.Length} Bytes");
+            _logger.LogInformation($"Original Size: {imageBytes.Length} Bytes");
 
             try
             {
-                using Image image = Image.Load(stream);
+                using var inputStream = new MemoryStream(imageBytes);
 
-                image.Mutate(x => x.Resize(new ResizeOptions
-                {
-                    Size = new Size(256, 0),
-                    Mode = ResizeMode.Max
-                }));
+                using Image image = Image.Load(inputStream);
+
+                image.Mutate(x => x.Resize(256, 0));
 
                 using var outputMemoryStream = new MemoryStream();
                 await image.SaveAsync(outputMemoryStream, new JpegEncoder { Quality = 75 });
@@ -41,7 +40,7 @@ namespace LanChat.Functions
 
                 return outputMemoryStream.ToArray();
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 _logger.LogError($"Failed to process image {name}. Error: {ex.Message}");
                 throw;
