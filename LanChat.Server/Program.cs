@@ -11,7 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 string? keyVaultUri = builder.Configuration["KeyVaultUri"];
 
-if (string.IsNullOrWhiteSpace(keyVaultUri))
+if (!string.IsNullOrWhiteSpace(keyVaultUri))
 {
     builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUri), new DefaultAzureCredential());
 }
