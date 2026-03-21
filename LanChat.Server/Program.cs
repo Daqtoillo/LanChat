@@ -6,6 +6,7 @@ using LanChat.Server.Hubs;
 using LanChat.Server.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Azure;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +16,15 @@ if (!string.IsNullOrWhiteSpace(keyVaultUri))
 {
     builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUri), new DefaultAzureCredential());
 }
+
+builder.Services.AddSingleton<KeyVaultCryptoService>();
+
+var redisConnectionString = builder.Configuration["RedisConnection"];
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp => 
+    ConnectionMultiplexer.Connect(redisConnectionString));
+
+builder.Services.AddSingleton<RedisCacheService>();
 
 builder.Services.AddSignalR();
 
@@ -34,8 +44,6 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddSingleton<BlobService>();
-
-builder.Services.AddSingleton<KeyVaultCryptoService>();
 
 builder.Services.AddAzureClients(clientBuilder =>
 {

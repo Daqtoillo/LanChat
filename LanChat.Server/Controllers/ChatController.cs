@@ -13,22 +13,33 @@ namespace LanChat.Server.Controllers
     {
         private readonly ChatDbContext _context;
         private readonly BlobService _blobService;
+        private readonly RedisCacheService _cacheService;
 
-        public ChatController(ChatDbContext context, BlobService blobService)
+        private const string ChatHistoryKey = "recent_chat_history";
+
+        public ChatController(ChatDbContext context, BlobService blobService, RedisCacheService cacheService)
         {
             _context = context;
             _blobService = blobService;
+            _cacheService = cacheService;
         }
 
         [HttpGet("history")]
         public async Task<ActionResult<IEnumerable<ChatMessage>>> GetHistory()
         {
-            var messages = await _context.Messages
-                .OrderByDescending(m => m.SentAt)
-                .Take(50)
-                .ToListAsync();
+            var messages = await _cacheService.GetCacheDataAsync<List<ChatMessage>>(ChatHistoryKey);
 
-            messages.Reverse();
+            if(messages == null)
+            {
+                messages = await _context.Messages
+                    .OrderByDescending(m => m.SentAt)
+                    .Take(50)
+                    .ToListAsync();
+
+                messages.Reverse();
+
+                await _cacheService.SetCacheDataAsync(ChatHistoryKey, messages, TimeSpan.FromMinutes(5));
+            }
 
             foreach(var msg in messages)
             {
