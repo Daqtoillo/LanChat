@@ -1,8 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Mvc;
-using LanChat.Server.Data;
-using LanChat.Common.Models;
+﻿using LanChat.Common.Models;
 using LanChat.Server.Services;
+using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
 namespace LanChat.Server.Controllers
@@ -11,15 +9,15 @@ namespace LanChat.Server.Controllers
     [ApiController]
     public class ChatController : ControllerBase
     {
-        private readonly ChatDbContext _context;
+        private readonly CosmosDbService _cosmosService;
         private readonly BlobService _blobService;
         private readonly RedisCacheService _cacheService;
 
         private const string ChatHistoryKey = "recent_chat_history";
 
-        public ChatController(ChatDbContext context, BlobService blobService, RedisCacheService cacheService)
+        public ChatController(CosmosDbService cosmosService, BlobService blobService, RedisCacheService cacheService)
         {
-            _context = context;
+            _cosmosService = cosmosService;
             _blobService = blobService;
             _cacheService = cacheService;
         }
@@ -27,18 +25,28 @@ namespace LanChat.Server.Controllers
         [HttpGet("history")]
         public async Task<ActionResult<IEnumerable<ChatMessage>>> GetHistory()
         {
-            var messages = await _cacheService.GetCacheDataAsync<List<ChatMessage>>(ChatHistoryKey);
+            List<ChatMessage> messages = null;
+
+            try
+            {
+                messages = await _cacheService.GetCacheDataAsync<List<ChatMessage>>(ChatHistoryKey);
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine($"Redis Cache Bypass: {ex.Message}");
+            }
 
             if(messages == null)
             {
-                messages = await _context.Messages
-                    .OrderByDescending(m => m.SentAt)
-                    .Take(50)
-                    .ToListAsync();
+                messages = await _cosmosService.GetRecentMessagesAsync();
 
                 messages.Reverse();
 
-                await _cacheService.SetCacheDataAsync(ChatHistoryKey, messages, TimeSpan.FromMinutes(5));
+                try
+                {
+                    await _cacheService.SetCacheDataAsync(ChatHistoryKey, messages, TimeSpan.FromMinutes(5));
+                }
+                catch { }
             }
 
             foreach(var msg in messages)
@@ -58,10 +66,7 @@ namespace LanChat.Server.Controllers
         {
             if (string.IsNullOrWhiteSpace(username)) return BadRequest("Username is required.");
 
-            var userMessages = await _context.Messages
-                           .Where(m => m.Sender == username)
-                           .OrderByDescending(m => m.SentAt)
-                           .ToListAsync();
+            var userMessages = await _cosmosService.GetMessagesByUserAsync(username);
 
             if (!userMessages.Any()) return NotFound("No messages found to export.");
 

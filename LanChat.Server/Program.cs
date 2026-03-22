@@ -1,10 +1,9 @@
 using Azure.Identity;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
-using LanChat.Server.Data;
 using LanChat.Server.Hubs;
 using LanChat.Server.Services;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Azure;
 using StackExchange.Redis;
 
@@ -32,8 +31,14 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddDbContext<ChatDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+var cosmosConnectionString = builder.Configuration["CosmosDbConnection"];
+
+builder.Services.AddSingleton(sp =>
+{
+    return new CosmosClient(cosmosConnectionString);
+});
+
+builder.Services.AddSingleton<CosmosDbService>();
 
 builder.Services.AddCors(options =>
 {

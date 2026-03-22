@@ -1,6 +1,5 @@
 ﻿using LanChat.Common.Dtos;
 using LanChat.Common.Models;
-using LanChat.Server.Data;
 using LanChat.Server.Services;
 using Microsoft.AspNetCore.SignalR;
 
@@ -8,12 +7,12 @@ namespace LanChat.Server.Hubs
 {
     public class ChatHub : Hub
     {
-        private readonly ChatDbContext _context;
+        private readonly CosmosDbService _cosmosService;
         private readonly BlobService _blobService;
 
-        public ChatHub(ChatDbContext context, BlobService  blobService)
+        public ChatHub(CosmosDbService cosmosService, BlobService  blobService)
         {
-            _context = context;
+            _cosmosService = cosmosService;
             _blobService = blobService;
         }
 
@@ -30,8 +29,7 @@ namespace LanChat.Server.Hubs
                 SentAt = DateTime.UtcNow
             };
 
-            _context.Messages.Add(msgEntity);
-            await _context.SaveChangesAsync();
+            await _cosmosService.AddMessageAsync(msgEntity);
 
             if (!string.IsNullOrWhiteSpace(msgEntity.ProfilePictureUrl))
                 msgEntity.ProfilePictureUrl = _blobService.GetSecureImageUrl(msgEntity.ProfilePictureUrl);
@@ -42,21 +40,28 @@ namespace LanChat.Server.Hubs
             await Clients.All.SendAsync("ReceiveMessage", msgEntity);
         }
 
-        public async Task DeleteMessage(int messageId, string requesterName)
+        public async Task DeleteMessage(string messageId, string requesterName)
         {
-            var message = await _context.Messages.FindAsync(messageId);
+            try
+            {
+                var messages = await _cosmosService.GetMessagesByUserAsync(requesterName);
+                var messageToDelete = messages.FirstOrDefault(m => m.Id == messageId);
 
-            if (message == null) return;
+                if (messageToDelete == null) return;
 
-            if (message.Sender != requesterName) return;
+                if (!string.IsNullOrWhiteSpace(messageToDelete.AttachmentUrl))
+                {
+                    await _blobService.DeleteFileAsync(messageToDelete.AttachmentUrl);
+                }
 
-            if(!string.IsNullOrWhiteSpace(message.AttachmentUrl))
-                await _blobService.DeleteFileAsync(message.AttachmentUrl);
+                await _cosmosService.DeleteMessageAsync(messageId, requesterName);
 
-            _context.Messages.Remove(message);
-            await _context.SaveChangesAsync();
-
-            await Clients.All.SendAsync("MessageDeleted", messageId);
+                await Clients.All.SendAsync("MessageDeleted", messageId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to delete message: {ex.Message}");
+            }
         }
 
         public override async Task OnConnectedAsync()
