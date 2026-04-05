@@ -31,7 +31,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-var cosmosConnectionString = builder.Configuration["CosmosDbConnection"];
+//var cosmosConnectionString = builder.Configuration["CosmosDbConnection"];
+
+var cosmosConnectionString = "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
 
 builder.Services.AddSingleton(sp =>
 {
@@ -52,9 +54,11 @@ builder.Services.AddSingleton<BlobService>();
 
 builder.Services.AddAzureClients(clientBuilder =>
 {
-    clientBuilder.AddBlobServiceClient(builder.Configuration["StorageConnection:blobServiceUri"]!);
-    clientBuilder.AddQueueServiceClient(builder.Configuration["StorageConnection:queueServiceUri"]!);
-    clientBuilder.AddTableServiceClient(builder.Configuration["StorageConnection:tableServiceUri"]!);
+    var storageConnectionString = builder.Configuration["StorageConnection:ConnectionString"];
+
+    clientBuilder.AddBlobServiceClient(storageConnectionString!);
+    clientBuilder.AddQueueServiceClient(storageConnectionString);
+    clientBuilder.AddTableServiceClient(storageConnectionString);
 });
 
 var app = builder.Build();
@@ -68,10 +72,11 @@ if (app.Environment.IsDevelopment())
 using (var scope = app.Services.CreateScope())
 {
     var blobServiceClient = scope.ServiceProvider.GetRequiredService<BlobServiceClient>();
-
     var startupContainerClient = blobServiceClient.GetBlobContainerClient("images");
-
     await startupContainerClient.CreateIfNotExistsAsync(PublicAccessType.None);
+
+    var cosmosDbService = scope.ServiceProvider.GetRequiredService<CosmosDbService>();
+    await cosmosDbService.InitializeDatabaseAsync();
 }
 
 app.UseHttpsRedirection();

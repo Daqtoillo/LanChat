@@ -31,14 +31,14 @@ namespace LanChat.Server.Controllers
             {
                 messages = await _cacheService.GetCacheDataAsync<List<ChatMessage>>(ChatHistoryKey);
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Console.WriteLine($"Redis Cache Bypass: {ex.Message}");
             }
 
-            if(messages == null)
+            if (messages == null)
             {
-                messages = await _cosmosService.GetRecentMessagesAsync();
+                messages = await _cosmosService.GetRecentMessagesAsync("General");
 
                 messages.Reverse();
 
@@ -49,7 +49,7 @@ namespace LanChat.Server.Controllers
                 catch { }
             }
 
-            foreach(var msg in messages)
+            foreach (var msg in messages)
             {
                 if (!string.IsNullOrWhiteSpace(msg.ProfilePictureUrl))
                     msg.ProfilePictureUrl = _blobService.GetSecureImageUrl(msg.ProfilePictureUrl);
@@ -66,7 +66,7 @@ namespace LanChat.Server.Controllers
         {
             if (string.IsNullOrWhiteSpace(username)) return BadRequest("Username is required.");
 
-            var userMessages = await _cosmosService.GetMessagesByUserAsync(username);
+            var userMessages = await _cosmosService.GetMessagesBySenderAsync(username);
 
             if (!userMessages.Any()) return NotFound("No messages found to export.");
 

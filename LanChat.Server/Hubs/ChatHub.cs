@@ -20,6 +20,7 @@ namespace LanChat.Server.Hubs
         {
             var msgEntity = new ChatMessage
             {
+                ChatRoomId = "General", 
                 Sender = messageDto.Sender,
                 Content = messageDto.Content,
                 ProfilePictureUrl = messageDto.ProfilePictureUrl,
@@ -44,7 +45,7 @@ namespace LanChat.Server.Hubs
         {
             try
             {
-                var messages = await _cosmosService.GetMessagesByUserAsync(requesterName);
+                var messages = await _cosmosService.GetMessagesBySenderAsync(requesterName);
                 var messageToDelete = messages.FirstOrDefault(m => m.Id == messageId);
 
                 if (messageToDelete == null) return;
@@ -54,7 +55,7 @@ namespace LanChat.Server.Hubs
                     await _blobService.DeleteFileAsync(messageToDelete.AttachmentUrl);
                 }
 
-                await _cosmosService.DeleteMessageAsync(messageId, requesterName);
+                await _cosmosService.DeleteMessageAsync(messageId, messageToDelete.ChatRoomId);
 
                 await Clients.All.SendAsync("MessageDeleted", messageId);
             }
